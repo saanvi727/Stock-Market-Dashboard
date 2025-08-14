@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Compare Stocks</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 p-6">
+    <div class="max-w-6xl mx-auto bg-gray-800 rounded-lg p-6">
+        <h1 class="text-3xl font-bold mb-4">📈 Compare Stocks</h1>
+
+        <div class="flex flex-col space-y-4">
+            <div class="flex space-x-4">
+                <input id="symbolInput" placeholder="Enter symbols (e.g. AAPL, MSFT, GOOGL)" 
+                       class="w-full p-2 rounded text-gray-900" />
+                <button id="loadButton" class="bg-blue-600 px-4 py-2 rounded">Compare</button>
+            </div>
+            <div class="flex space-x-6 text-sm text-gray-300">
+                <label><input type="checkbox" id="ma30" checked class="mr-1"> 30-Day MA</label>
+                <label><input type="checkbox" id="ma90" checked class="mr-1"> 90-Day MA</label>
+                <label><input type="checkbox" id="vwap" checked class="mr-1"> VWAP</label>
+            </div>
+        </div>
+
+        <div id="compareChart" class="mt-8"></div>
+
+        <a href="/" class="inline-block mt-8 text-blue-400 hover:underline">← Back to Dashboard</a>
+    </div>
+
+    <script>
+        document.getElementById("loadButton").addEventListener("click", async function () {
+            const rawSymbols = document.getElementById("symbolInput").value.trim();
+            if (!rawSymbols) {
+                alert("Please enter at least one stock symbol.");
+                return;
+            }
+
+            const symbols = rawSymbols.split(',').map(s => s.trim().toUpperCase()).join(",");
+            const showMA30 = document.getElementById("ma30").checked;
+            const showMA90 = document.getElementById("ma90").checked;
+            const showVWAP = document.getElementById("vwap").checked;
+
+            const resp = await fetch(`/compare-data?symbols=${symbols}`);
+            const result = await resp.json();
+
+            const traces = [];
+
+            for (const [symbol, data] of Object.entries(result)) {
+                if (data.error) {
+                    alert(data.error);
+                    continue;
+                }
+
+                traces.push({
+                    x: data.dates,
+                    y: data.close,
+                    name: `${symbol} Close`,
+                    mode: 'lines',
+                    line: { width: 2 }
+                });
+
+                if (showMA30) {
+                    traces.push({
+                        x: data.dates,
+                        y: data.ma30,
+                        name: `${symbol} MA30`,
+                        mode: 'lines',
+                        line: { dash: 'dot', width: 1 }
+                    });
+                }
+
+                if (showMA90) {
+                    traces.push({
+                        x: data.dates,
+                        y: data.ma90,
+                        name: `${symbol} MA90`,
+                        mode: 'lines',
+                        line: { dash: 'dash', width: 1 }
+                    });
+                }
+
+                if (showVWAP) {
+                    traces.push({
+                        x: data.dates,
+                        y: data.vwap,
+                        name: `${symbol} VWAP`,
+                        mode: 'lines',
+                        line: { dash: 'longdash', width: 1 }
+                    });
+                }
+            }
+
+            Plotly.newPlot('compareChart', traces, {
+                title: 'Normalized Price Comparison',
+                yaxis: { title: 'Price (Normalized to 100)' },
+                paper_bgcolor: '#1F2937',
+                plot_bgcolor: '#1F2937',
+                font: { color: '#FFFFFF' },
+                margin: { t: 40 }
+            }, {responsive: true});
+        });
+    </script>
+</body>
+</html>
