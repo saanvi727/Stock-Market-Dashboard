@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stock Sentiment Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 p-6">
+    {% extends "layout.html" %}
+    {% block title %}Sentiment Analysis{% endblock %}
+    {% block content %}
+    <div class="max-w-3xl mx-auto bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h1 class="text-3xl font-bold mb-4">🧠 News Sentiment Analysis</h1>
+        
+        <div class="flex space-x-4 mb-4">
+            <input id="symbolInput" placeholder="Enter Stock (e.g., AAPL, Microsoft)"
+                class="text-gray-900 p-2 rounded w-full" />
+
+            <select id="daysSelect" class="text-gray-900 p-2 rounded">
+                <option value="1">1 Day</option>
+                <option value="7">7 Days</option>
+                <option value="14">14 Days</option>
+                <option value="30">30 Days</option>
+            </select>
+            <button onclick="fetchNews()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Load News</button>
+        </div>
+
+        <div class="mb-6">
+            <canvas id="sentimentChart" class="w-full h-64"></canvas>
+        </div>
+
+        <div id="newsContainer" class="space-y-4"></div>
+    </div>
+
+    <script>
+
+        let sentimentChart = null;
+
+        async function fetchNews() {
+            const symbol = document.getElementById("symbolInput").value.trim();
+            const days = document.getElementById("daysSelect").value;
+    
+            if (!symbol) {
+                alert("Please enter a stock symbol.");
+                return;
+            }
+    
+            const res = await fetch(`/news?symbol=${encodeURIComponent(symbol)}&days=${days}`);
+            const data = await res.json();
+    
+            const container = document.getElementById("newsContainer");
+            container.innerHTML = "";
+    
+            if (data.articles && data.articles.length > 0) {
+
+                // Count sentiment
+                const counts = { positive: 0, neutral: 0, negative: 0 };
+                data.articles.forEach(a => counts[a.sentiment]++);
+
+                updateSentimentChart(counts);
+                data.articles.forEach(article => {
+                    const card = document.createElement("div");
+                    card.className = "flex bg-gray-800 rounded-lg shadow-md overflow-hidden";
+    
+                    const sentimentColor = {
+                        positive: "text-green-400",
+                        neutral: "text-yellow-400",
+                        negative: "text-red-400"
+                    }[article.sentiment] || "text-gray-300";
+    
+                    const imageSection = article.urlToImage
+                    ? `<img src="${article.urlToImage}" alt="Image" class="w-48 h-32 object-cover">`
+                    : "";
+    
+                    card.innerHTML = `
+                        ${imageSection}
+                        <div class="p-4 flex-1">
+                            <a href="${article.url}" target="_blank" class="text-lg font-semibold hover:underline">${article.title}</a>
+                            <p class="text-sm text-gray-400">${new Date(article.publishedAt).toLocaleString()}</p>
+                            <p class="mt-2">${article.description || "No description available."}</p>
+                            <p class="mt-2 font-medium ${sentimentColor}">Sentiment: ${article.sentiment}</p>
+                        </div>
+                    `;
+    
+                    container.appendChild(card);
+                });
+            } else {
+                updateSentimentChart({ positive: 0, neutral: 0, negative: 0 });
+                container.innerHTML = "<p class='text-red-400'>No news articles found.</p>";
+            }
+        }
+
+        function updateSentimentChart(counts) {
+            const ctx = document.getElementById('sentimentChart').getContext('2d');
+            const data = {
+                labels: ['Positive', 'Neutral', 'Negative'],
+                datasets: [{
+                    data: [counts.positive, counts.neutral, counts.negative],
+                    backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+                    borderWidth: 1
+                }]
+            };
+
+            if (sentimentChart) {
+                sentimentChart.data = data;
+                sentimentChart.update();
+            } else {
+                sentimentChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: data,
+                    options: {
+                        plugins: {
+                            legend: {
+                                labels: { color: "#f3f4f6" }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    </script>
+    
+    {% endblock %}
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 p-4">
+    <nav class="flex space-x-4 mb-6 text-lg">
+        <a href="/" class="text-blue-400 hover:underline">📊 Dashboard</a>
+        <a href="/sentiment" class="text-blue-400 hover:underline">🧠 Sentiment</a>
+        <a href="/predict" class="text-blue-400 hover:underline">🔮 Predictions</a>
+        <a href="/ai-recommendations" class="text-blue-400 hover:underline">🔮 Portfolio</a>
+    </nav>
+
+    {% block content %}{% endblock %}
+</body>
+</html>

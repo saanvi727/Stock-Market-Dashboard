@@ -1,0 +1,73 @@
+{% extends "layout.html" %}
+{% block title %}Stock Predictions{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto p-6 bg-gray-800 rounded-lg">
+    <h1 class="text-3xl font-bold mb-4">🔮 Price Prediction</h1>
+    <div class="flex space-x-4">
+        <input id="predictInput" placeholder="Enter Symbol (e.g., AAPL)" class="p-2 rounded text-black flex-1">
+        <button id="predictBtn" class="bg-purple-600 px-4 py-2 rounded hover:bg-purple-700">Predict</button>
+    </div>
+
+    <div id="predictionChart" class="mt-6"></div>
+</div>
+
+<script>
+    async function fetchPrediction(symbol) {
+        const res = await fetch(`/prediction-data?symbol=${symbol}`);
+        const data = await res.json();
+
+        if (data.error) return alert(data.error);
+
+        const hist = {
+            x: data.historical_dates,
+            y: data.historical_prices,
+            mode: 'lines',
+            name: "Historical",
+            line: { color: "#3B82F6" }
+        };
+
+        const predicted = {
+            x: data.future_dates,
+            y: data.future_prices,
+            mode: 'lines+markers',
+            name: "Predicted",
+            line: { color: "#F59E0B", dash: 'dash' }
+        };
+
+        const confLower = {
+            x: data.future_dates,
+            y: data.confidence_lower,
+            mode: 'lines',
+            line: { width: 0 },
+            showlegend: false
+        };
+
+        const confUpper = {
+            x: data.future_dates,
+            y: data.confidence_upper,
+            mode: 'lines',
+            fill: 'tonexty',
+            fillcolor: 'rgba(245, 158, 11, 0.2)',
+            line: { width: 0 },
+            name: "Confidence Band"
+        };
+
+        Plotly.newPlot("predictionChart", [hist, confLower, confUpper, predicted], {
+            title: `Prediction for ${data.symbol}`,
+            paper_bgcolor: "#1F2937",
+            plot_bgcolor: "#1F2937",
+            font: { color: "white" },
+            margin: { t: 40 },
+            yaxis: { title: "Price (USD)" },
+            xaxis: { title: "Date" }
+        }, { responsive: true });
+    }
+
+    document.getElementById("predictBtn").addEventListener("click", () => {
+        const symbol = document.getElementById("predictInput").value.trim().toUpperCase();
+        if (symbol) fetchPrediction(symbol);
+    });
+
+    fetchPrediction("AAPL");  // default
+</script>
+{% endblock %}

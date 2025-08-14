@@ -1,0 +1,321 @@
+
+    {% extends "layout.html" %}
+    {% block title %}Stock Market Dashboard{% endblock %}
+    {% block content %}
+    <div class="max-w-7xl mx-auto p-6 rounded-lg bg-gray-800">
+        <h1 class="text-3xl font-bold">Stock Market Dashboard</h1>
+        <a href="/compare" class="text-blue-400 hover:underline mt-2 inline-block">🔍 Compare Multiple Stocks</a>
+        <a href="/predict" class="text-blue-400 hover:underline">🔮 Prediction</a>
+
+        <div class="flex space-x-4 mt-4">
+            <input id="symbolInput" placeholder="Enter Symbol (e.g., AAPL)" 
+                class="border rounded p-2 flex-1 text-gray-900">
+            <button id="loadButton" class="bg-blue-600 rounded p-2">Load</button>
+        </div>
+
+        <!-- Stats -->
+        <div id="stats" class="mt-4">
+            <h2 id="stockHeader" class="text-2xl font-bold"></h2>
+            <p>Last Close: $<span id="lastClose"></span></p>
+            <p>52-Week High: $<span id="high"></span> | 52-Week Low: $<span id="low"></span></p>
+        </div>
+
+
+        <!-- Charts -->
+        <div id="priceChart" class="mt-6"></div>
+        <div id="volumeChart" class="mt-6"></div>
+        <div id="rsiChart" class="mt-6"></div>
+        <div id="macdChart" class="mt-6"></div>
+        <div id="bollingerChart" class="mt-6"></div>
+        <div id="vwapChart" class="mt-6"></div>
+
+        <!-- Generate Insights Button -->
+        <div class="mt-6">
+            <button id="insightButton" class="bg-purple-600 px-4 py-2 rounded text-white hover:bg-purple-700">
+            🧠 Generate Insights
+            </button>
+        </div>
+
+        <!-- Display Area for Insights -->
+        <div id="insightOutput" class="mt-4 bg-gray-700 p-4 rounded text-sm text-gray-200 hidden"></div>
+
+         <!-- News Feed -->
+         <div class="mt-8">
+            <h3 class="text-xl font-bold">📰 News & Sentiment</h3>
+            <ul id="news-feed" class="space-y-2 mt-2"></ul>
+        </div>
+
+
+        <!-- Placeholder for Gainers / Losers Table -->
+        <div class="mt-8">
+            <h3 class="text-xl font-bold">Top Gainers / Losers</h3>
+            <table class="w-full mt-2 text-left text-gray-300">
+                <thead>
+                    <tr>
+                        <th class="border-b border-gray-600 p-2">Symbol</th>
+                        <th class="border-b border-gray-600 p-2">Last Price</th>
+                        <th class="border-b border-gray-600 p-2">Change (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>TSLA</td><td>215.17</td><td class="text-green-500">6.4%</td></tr>
+                    <tr><td>FB</td><td>303.91</td><td class="text-green-500">8.2%</td></tr>
+                    <tr><td>XOM</td><td>40.01</td><td class="text-red-500">-2.1%</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- AI Recommendations -->
+        <div class="mt-8">
+            <h3 class="text-xl font-bold">🤖 AI Stock Recommendations</h3>
+            <button onclick="loadAIRecommendations()" class="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">
+                🚀 Load Smart Picks
+            </button>
+            <div id="ai-recommendations" class="mt-4 space-y-2"></div>
+        </div>
+    </div>
+
+    <script>
+        async function loadData(symbol) {
+            const resp = await fetch(`/data?symbol=${symbol}`);
+            const data = await resp.json();
+    
+            if(data.error) {
+                alert(data.error);
+                return;
+            }
+    
+            // Stats
+            document.getElementById("stockHeader").innerText = data.symbol;
+            document.getElementById("lastClose").innerText = data.last_close.toFixed(2);
+            document.getElementById("high").innerText = data.high.toFixed(2);
+            document.getElementById("low").innerText = data.low.toFixed(2);
+
+            window.latestInsight = data.insight || "No insight available.";
+    
+            // Clean data for plotting
+            const dates = data.dates;
+            const closes = data.closes.map(v => v ?? null);
+            const ma30 = data.ma30.map(v => v ?? null);
+            const ma90 = data.ma90.map(v => v ?? null);
+            const volumes = data.volumes.map(v => v ?? null);
+            const rsi = data.rsi.map(v => v ?? null);
+            const macd = data.macd.map(v => v ?? null);
+            const macdSignal = data.macd_signal.map(v => v ?? null);
+            const bbUpper = data.bb_upper.map(v => v ?? null);
+            const bbLower = data.bb_lower.map(v => v ?? null);
+            const vwap = data.vwap.map(v => v ?? null);
+    
+            // Plotly Charts
+            const priceData = [
+            { x: dates, y: closes, mode: 'lines', name: 'Close', line: { color: '#3B82F6' }},
+            { x: dates, y: ma30, mode: 'lines', name: '30-Day MA', line: { color: '#F59E0B' }},
+            { x: dates, y: ma90, mode: 'lines', name: '90-Day MA', line: { color: '#10B981' }},
+            { x: dates, y: vwap, mode: 'lines', name: 'VWAP', line: { color: '#8B5CF6', width: 2, dash: 'dash' }},
+        ];
+
+        const eventShapes = [];
+
+        if (data.events) {
+            for (const [type, date] of Object.entries(data.events)) {
+                if (date) {
+                    eventShapes.push({
+                        type: 'line',
+                        x0: date,
+                        x1: date,
+                        y0: 0,
+                        y1: 1,
+                        xref: 'x',
+                        yref: 'paper',
+                        line: {
+                            color: type === 'earnings' ? '#F59E0B' :
+                                type === 'dividend' ? '#10B981' :
+                                '#8B5CF6',
+                            width: 2,
+                            dash: 'dot'
+                        }
+                    });
+                }
+            }
+        }
+
+        // === EVENT ANNOTATIONS (TOOLTIPS) ===
+        const eventAnnotations = Object.entries(data.events).map(([type, date]) => {
+            if (!date) return null;
+            return {
+                x: date,
+                y: 1,
+                xref: 'x',
+                yref: 'paper',
+                text: `📌 ${type}`,
+                showarrow: true,
+                arrowhead: 7,
+                ax: 0,
+                ay: -40,
+                font: { color: 'white' }
+            };
+        }).filter(Boolean);
+
+    
+            Plotly.newPlot('priceChart', priceData, {
+                title: `${data.symbol} Price, MAs, VWAP`,
+                paper_bgcolor: '#1F2937',
+                plot_bgcolor: '#1F2937',
+                font: { color: 'white' },
+                margin: { t: 40 },
+                shapes: eventShapes,
+                annotations: eventAnnotations
+        }, {responsive:true});
+    
+            const volumeData = [
+                {
+                    x: dates,
+                    y: volumes,
+                    type: 'bar',
+                    marker: { color: '#3B82F6' },
+                    name: 'Volume'
+                }
+            ];
+    
+            Plotly.newPlot('volumeChart', volumeData, {
+                title: `${data.symbol} Trading Volume`,
+                paper_bgcolor: '#1F2937',
+                plot_bgcolor: '#1F2937',
+                font: { color: 'white' },
+                margin: { t: 40 }
+            }, {responsive:true});
+
+            // === BOLLINGER BAND CHART ===
+        const bollingerData = [
+            { x: dates, y: bbUpper, mode: 'lines', name: 'Bollinger Upper', line: { color: '#EF4444' } },
+            { x: dates, y: bbLower, mode: 'lines', name: 'Bollinger Lower', line: { color: '#22D3EE' } }
+        ];
+
+        Plotly.newPlot('bollingerChart', bollingerData, {
+            title: `${data.symbol} Bollinger Bands`,
+            paper_bgcolor: '#1F2937',
+            plot_bgcolor: '#1F2937',
+            font: { color: 'white' },
+            margin: { t: 40 }
+        }, {responsive:true});
+
+                    // === RSI CHART ===
+        Plotly.newPlot('rsiChart', [
+            { x: dates, y: rsi, mode: 'lines', name: 'RSI', line: { color: '#F97316' } },
+            { x: dates, y: Array(dates.length).fill(70), mode: 'lines', name: 'Overbought (70)', line: { dash: 'dot', color: '#DC2626' } },
+            { x: dates, y: Array(dates.length).fill(30), mode: 'lines', name: 'Oversold (30)', line: { dash: 'dot', color: '#16A34A' } }
+        ], {
+            title: `${data.symbol} RSI`,
+            yaxis: { range: [0, 100] },
+            paper_bgcolor: '#1F2937',
+            plot_bgcolor: '#1F2937',
+            font: { color: 'white' },
+            margin: { t: 40 }
+        }, {responsive:true});
+
+        // === MACD CHART ===
+        Plotly.newPlot('macdChart', [
+            { x: dates, y: macd, mode: 'lines', name: 'MACD', line: { color: '#0EA5E9' } },
+            { x: dates, y: macdSignal, mode: 'lines', name: 'Signal Line', line: { color: '#F472B6' } }
+        ], {
+            title: `${data.symbol} MACD`,
+            paper_bgcolor: '#1F2937',
+            plot_bgcolor: '#1F2937',
+            font: { color: 'white' },
+            margin: { t: 40 }
+        }, {responsive:true});
+        fetchNews(symbol);
+
+        }
+
+        async function fetchNews(symbol) {
+            const insight = window.latestInsight || "";
+            const response = await fetch(`/news?symbol=${symbol}`);
+            const data = await response.json();
+            const newsFeed = document.getElementById("news-feed");
+            newsFeed.innerHTML = "";
+
+            if (data.articles) {
+                for (const article of data.articles) {
+                    const li = document.createElement("li");
+                    li.innerHTML = `<a href="${article.url}" target="_blank" class="text-blue-400 hover:underline">${article.title}</a> - <span class="italic">${article.sentiment}</span>`;
+                    newsFeed.appendChild(li);
+                }
+            }
+
+           if (data.summary) {
+                const summaryDiv = document.createElement("div");
+                summaryDiv.className = "mt-4 p-4 bg-gray-700 rounded text-sm text-gray-200 whitespace-pre-line";
+                summaryDiv.innerText = data.summary;
+                newsFeed.parentNode.appendChild(summaryDiv);
+    }
+
+
+        }
+
+    async function loadAIRecommendations() {
+    const container = document.getElementById("ai-recommendations");
+    container.innerHTML = "⏳ Loading...";
+
+    try {
+        const response = await fetch("/ai-recommendations");
+        const data = await response.json();
+
+        if (!data.length) {
+            container.innerHTML = "⚠️ No recommendations available.";
+            return;
+        }
+
+        container.innerHTML = "";
+        for (const rec of data) {
+            const div = document.createElement("div");
+            div.className = "bg-gray-700 p-3 rounded shadow text-sm";
+
+            div.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <strong class="text-lg">${rec.symbol}</strong>
+                    <span class="text-white font-bold text-lg">${rec.signal}</span>
+                </div>
+                <div class="text-gray-300 mt-1">
+                    💵 Price: $${rec.price} |
+                    RSI: ${rec.rsi} |
+                    MACD: ${rec.macd} |
+                    Trend: ${rec.trend}
+                </div>
+            `;
+            container.appendChild(div);
+        }
+    } catch (err) {
+        console.error("AI recommendation error:", err);
+        container.innerHTML = "❌ Failed to load recommendations.";
+    }
+    }   
+
+
+    
+        document.getElementById("loadButton").addEventListener("click", function() {
+            const symbol = document.getElementById("symbolInput").value.trim().toUpperCase();
+            if (!symbol) {
+                alert("Please enter a symbol!");
+                return;
+            }
+            loadData(symbol);
+        });
+    
+        loadData("AAPL"); // Default
+        loadAIRecommendations();
+
+        document.getElementById("insightButton").addEventListener("click", () => {
+            const symbol = document.getElementById("stockHeader").innerText.trim();
+            if (!symbol) {
+                alert("Please load a stock first.");
+                return;
+            }
+
+            const output = document.getElementById("insightOutput");
+            output.classList.remove("hidden");
+            output.innerText = "📊 Insight for " + symbol + ":\n\n" + (window.latestInsight || "No insight found.");
+        });
+
+    </script>
+    {% endblock %}
